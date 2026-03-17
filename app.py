@@ -30,42 +30,43 @@ with col1:
 with col2:
     drug2 = st.selectbox("Select Drug 2", drug_list)
 
-# ---------------- PATIENT INPUT ----------------
+# ---------------- PATIENT PROFILE ----------------
 st.subheader("Patient Profile")
 
 colP1, colP2, colP3 = st.columns(3)
 
 with colP1:
-    age = st.number_input("Age", 1, 100, 30)
+    age = st.number_input("Age", min_value=1, max_value=100, value=30, key="age")
 
 with colP2:
-    liver = st.selectbox("Liver Impairment", ["No", "Yes"])
+    liver = st.selectbox("Liver Impairment", ["No", "Yes"], key="liver")
 
 with colP3:
-    renal = st.selectbox("Renal Impairment", ["No", "Yes"])
+    renal = st.selectbox("Renal Impairment", ["No", "Yes"], key="renal")
 
-# ---------------- DOSE ----------------
+# ---------------- DOSAGE ----------------
 st.subheader("Dosage Information")
 
 colD1, colD2 = st.columns(2)
 
 with colD1:
-    dose1 = st.number_input(f"{drug1} Dose (mg)", 0.0, key="dose1")
+    dose1 = st.number_input(f"{drug1} Dose (mg)", min_value=0.0, value=0.0, key="dose1")
 
 with colD2:
-    dose2 = st.number_input(f"{drug2} Dose (mg)", 0.0, key="dose2")
+    dose2 = st.number_input(f"{drug2} Dose (mg)", min_value=0.0, value=0.0, key="dose2")
 
 # ---------------- PUBCHEM ----------------
 def get_pubchem(drug):
     try:
-        cid = requests.get(
+        response = requests.get(
             f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drug}/cids/JSON"
-        ).json()['IdentifierList']['CID'][0]
-
-        return (
-            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/PNG",
-            f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
         )
+        cid = response.json()['IdentifierList']['CID'][0]
+
+        img = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/PNG"
+        link = f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
+
+        return img, link
     except:
         return None, None
 
@@ -87,6 +88,7 @@ def calculate_risk(severity, age, liver, renal, dose1, dose2):
 
 # ---------------- PDF ----------------
 def generate_pdf(drug1, drug2, severity, risk, advice, outcome):
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
@@ -102,6 +104,7 @@ def generate_pdf(drug1, drug2, severity, risk, advice, outcome):
 
     doc.build(content)
     buffer.seek(0)
+
     return buffer
 
 # ---------------- BUTTON ----------------
@@ -117,10 +120,11 @@ if st.button("Analyze Interaction"):
     if len(row) > 0:
 
         r = row.iloc[0]
+
         severity = r["Severity"]
         risk = calculate_risk(severity, age, liver, renal, dose1, dose2)
 
-        # SUMMARY
+        # ---------------- SUMMARY ----------------
         st.subheader("Interaction Summary")
 
         colA, colB, colC = st.columns(3)
@@ -129,17 +133,17 @@ if st.button("Analyze Interaction"):
             st.metric("Confidence", "100%")
 
         with colB:
-    if severity == "Major":
-        st.error(severity)
-    elif severity == "Moderate":
-        st.warning(severity)
-    else:
-        st.success(severity)
+            if severity == "Major":
+                st.error(severity)
+            elif severity == "Moderate":
+                st.warning(severity)
+            else:
+                st.success(severity)
 
         with colC:
-            st.metric("Risk Score", risk)
+            st.metric("Risk Score (0–10)", risk)
 
-        # GAUGE
+        # ---------------- GAUGE ----------------
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=risk,
@@ -147,37 +151,42 @@ if st.button("Analyze Interaction"):
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-        # GRAPH
+        # ---------------- GRAPH ----------------
         st.subheader("Severity Graph")
-        st.bar_chart({
-            "Minor": [1 if severity == "Minor" else 0],
-            "Moderate": [1 if severity == "Moderate" else 0],
-            "Major": [1 if severity == "Major" else 0]
-        })
 
-        # STRUCTURE + REFERENCES
+        fig_bar = go.Figure(go.Bar(
+            x=["Minor", "Moderate", "Major"],
+            y=[
+                1 if severity == "Minor" else 0,
+                1 if severity == "Moderate" else 0,
+                1 if severity == "Major" else 0
+            ]
+        ))
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        # ---------------- STRUCTURES ----------------
         st.subheader("Drug Structures & References")
 
         c1, c2 = st.columns(2)
 
         with c1:
             img, link = get_pubchem(drug1)
-            st.write(drug1)
+            st.write(f"### {drug1}")
             if img:
-                st.image(img)
-                st.markdown(f"[PubChem Reference]({link})")
+                st.image(img, width=250)
+                st.markdown(f"[View on PubChem]({link})")
 
         with c2:
             img, link = get_pubchem(drug2)
-            st.write(drug2)
+            st.write(f"### {drug2}")
             if img:
-                st.image(img)
-                st.markdown(f"[PubChem Reference]({link})")
+                st.image(img, width=250)
+                st.markdown(f"[View on PubChem]({link})")
 
-        # TABS
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "Overview", "Mechanism", "PK/PD", "Clinical"
-        ])
+        # ---------------- TABS ----------------
+        tab1, tab2, tab3, tab4 = st.tabs(
+            ["Overview", "Mechanism", "PK/PD", "Clinical"]
+        )
 
         with tab1:
             st.info(r["Interaction"])
@@ -186,11 +195,11 @@ if st.button("Analyze Interaction"):
 
         with tab2:
             st.write("Mechanism:", r["Mechanism"])
-            st.warning("CYP:", r["Cytochrome"])
+            st.warning(f"CYP: {r['Cytochrome']}")
 
         with tab3:
-            st.write("PK:", r["Pharmacokinetics"])
-            st.write("PD:", r["Pharmacodynamics"])
+            st.write("Pharmacokinetics:", r["Pharmacokinetics"])
+            st.write("Pharmacodynamics:", r["Pharmacodynamics"])
 
         with tab4:
             st.write("Clinical Advice:", r["Clinical_Advice"])
@@ -223,10 +232,14 @@ if st.button("Analyze Interaction"):
             for p in points:
                 st.write("•", p)
 
-        # PDF
+        # ---------------- PDF ----------------
         pdf = generate_pdf(
-            drug1, drug2, severity, risk,
-            r["Clinical_Advice"], r["Clinical_Outcome"]
+            drug1,
+            drug2,
+            severity,
+            risk,
+            r["Clinical_Advice"],
+            r["Clinical_Outcome"]
         )
 
         st.download_button(
