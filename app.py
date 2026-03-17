@@ -50,10 +50,10 @@ st.subheader("Dosage Information")
 colD1, colD2 = st.columns(2)
 
 with colD1:
-    dose1 = st.number_input(f"{drug1} Dose (mg)", 0.0)
+    dose1 = st.number_input(f"{drug1} Dose (mg)", 0.0, key="dose1")
 
 with colD2:
-    dose2 = st.number_input(f"{drug2} Dose (mg)", 0.0)
+    dose2 = st.number_input(f"{drug2} Dose (mg)", 0.0, key="dose2")
 
 # ---------------- PUBCHEM ----------------
 def get_pubchem(drug):
