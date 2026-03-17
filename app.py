@@ -129,12 +129,12 @@ if st.button("Analyze Interaction"):
             st.metric("Confidence", "100%")
 
         with colB:
-            if severity == "Major":
-    st.error(severity)
-elif severity == "Moderate":
-    st.warning(severity)
-else:
-    st.success(severity)
+    if severity == "Major":
+        st.error(severity)
+    elif severity == "Moderate":
+        st.warning(severity)
+    else:
+        st.success(severity)
 
         with colC:
             st.metric("Risk Score", risk)
