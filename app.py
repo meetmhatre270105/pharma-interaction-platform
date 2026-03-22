@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -36,7 +37,7 @@ st.subheader("Patient Profile")
 colP1, colP2, colP3 = st.columns(3)
 
 with colP1:
-    age = st.number_input("Age", min_value=1, max_value=100, value=30, key="age")
+    age = st.number_input("Age", 1, 100, 30, key="age")
 
 with colP2:
     liver = st.selectbox("Liver Impairment", ["No", "Yes"], key="liver")
@@ -50,29 +51,27 @@ st.subheader("Dosage Information")
 colD1, colD2 = st.columns(2)
 
 with colD1:
-    dose1 = st.number_input(f"{drug1} Dose (mg)", min_value=0.0, value=0.0, key="dose1")
+    dose1 = st.number_input(f"{drug1} Dose (mg)", 0.0, key="dose1")
 
 with colD2:
-    dose2 = st.number_input(f"{drug2} Dose (mg)", min_value=0.0, value=0.0, key="dose2")
+    dose2 = st.number_input(f"{drug2} Dose (mg)", 0.0, key="dose2")
 
 # ---------------- PUBCHEM ----------------
 def get_pubchem(drug):
     try:
-        response = requests.get(
+        cid = requests.get(
             f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drug}/cids/JSON"
+        ).json()['IdentifierList']['CID'][0]
+
+        return (
+            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/PNG",
+            f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
         )
-        cid = response.json()['IdentifierList']['CID'][0]
-
-        img = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/PNG"
-        link = f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
-
-        return img, link
     except:
         return None, None
 
 # ---------------- RISK ----------------
 def calculate_risk(severity, age, liver, renal, dose1, dose2):
-
     base = {"Minor": 3, "Moderate": 6, "Major": 9}.get(severity, 5)
 
     if age > 65:
@@ -88,7 +87,6 @@ def calculate_risk(severity, age, liver, renal, dose1, dose2):
 
 # ---------------- PDF ----------------
 def generate_pdf(drug1, drug2, severity, risk, advice, outcome):
-
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
@@ -104,7 +102,6 @@ def generate_pdf(drug1, drug2, severity, risk, advice, outcome):
 
     doc.build(content)
     buffer.seek(0)
-
     return buffer
 
 # ---------------- BUTTON ----------------
@@ -120,7 +117,6 @@ if st.button("Analyze Interaction"):
     if len(row) > 0:
 
         r = row.iloc[0]
-
         severity = r["Severity"]
         risk = calculate_risk(severity, age, liver, renal, dose1, dose2)
 
@@ -201,33 +197,80 @@ if st.button("Analyze Interaction"):
             st.write("Pharmacokinetics:", r["Pharmacokinetics"])
             st.write("Pharmacodynamics:", r["Pharmacodynamics"])
 
+        # ---------------- CLINICAL TAB (UPGRADED) ----------------
         with tab4:
+
+            st.subheader("Clinical Summary")
+
+            if severity == "Major":
+                st.error("⚠️ Potentially Contraindicated Combination")
+
+            st.subheader("Clinical Action")
+
+            if severity == "Major":
+                st.error("Avoid combination or use strict monitoring")
+            elif severity == "Moderate":
+                st.warning("Monitor patient or adjust dose")
+            else:
+                st.success("Generally safe")
+
+            st.subheader("Real Clinical Risk")
+            st.error(r["Clinical_Outcome"])
+
+            st.subheader("Cytochrome Impact")
+            cyp = str(r["Cytochrome"])
+
+            if "3A4" in cyp:
+                st.warning("CYP3A4 involvement → major metabolism interaction")
+            elif "2D6" in cyp:
+                st.warning("CYP2D6 involvement → altered response")
+            elif "2C9" in cyp:
+                st.warning("CYP2C9 involvement → clearance affected")
+            else:
+                st.info(cyp)
+
+            st.subheader("What to Monitor")
+
+            monitor = []
+
+            if "Warfarin" in (drug1, drug2):
+                monitor.append("INR levels")
+            if "Digoxin" in (drug1, drug2):
+                monitor.append("Serum digoxin levels")
+            if "Aspirin" in (drug1, drug2):
+                monitor.append("Bleeding risk")
+            if "Insulin" in (drug1, drug2):
+                monitor.append("Blood glucose levels")
+
+            if len(monitor) == 0:
+                monitor.append("General monitoring")
+
+            for m in monitor:
+                st.write("•", m)
+
+            st.subheader("Detailed Clinical Info")
+
             st.write("Clinical Advice:", r["Clinical_Advice"])
-            st.write("Outcome:", r["Clinical_Outcome"])
             st.write("Dose:", r["Dose_Consideration"])
             st.write("Therapeutic Index:", r["Therapeutic_Index"])
             st.write("Onset:", r["Onset"])
             st.write("Route:", r["Route_Impact"])
             st.write("Patient Factors:", r["Patient_Factors"])
 
-            st.write("### Why This Matters Clinically")
+            st.subheader("Why This Matters")
 
             points = []
 
             if severity == "Major":
-                points.append("High risk of serious adverse effects")
-
+                points.append("High risk of severe toxicity")
             if liver == "Yes":
-                points.append("Liver impairment increases toxicity risk")
-
+                points.append("Liver impairment increases toxicity")
             if renal == "Yes":
                 points.append("Renal impairment causes accumulation")
-
             if age > 65:
-                points.append("Elderly patients are more sensitive")
-
+                points.append("Elderly are more sensitive")
             if dose1 > 500 or dose2 > 500:
-                points.append("High dose increases severity")
+                points.append("High dose increases risk")
 
             for p in points:
                 st.write("•", p)
